@@ -6,7 +6,7 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "oriente-one"
-database_id = "COLE_AQUI_O_ID_DO_D1"
+database_id = "5487fc69-e5b3-46bc-81ea-57960a99f5fd"
 
 [vars]
 RESEND_FROM = "Oriente One <one@orientesolucoes.com>"
