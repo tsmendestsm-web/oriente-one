@@ -1,4 +1,4 @@
-// Oriente One v1.0.0 | Definição dos instrumentos (fonte única para formulário público e cálculo)
+// Oriente One v1.1.0 | Definição dos instrumentos (fonte única para formulário público e cálculo)
 // Transcrito dos Google Forms originais em 30/10/2026.
 
 const ESCALA_5 = { min: 1, max: 5, minLabel: 'Discordo Totalmente', maxLabel: 'Concordo Totalmente' };

@@ -1,5 +1,5 @@
-// Oriente One v1.0.0 | utilidades de interface compartilhadas
-export const VERSION = '1.0.0';
+// Oriente One v1.1.0 | utilidades de interface compartilhadas
+export const VERSION = '1.1.0';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

@@ -1,4 +1,4 @@
-# Oriente One v1.0.0
+# Oriente One v1.1.0
 name = "oriente-one"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "public"
@@ -6,7 +6,7 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "oriente-one"
-database_id = "5487fc69-e5b3-46bc-81ea-57960a99f5fd"
+database_id = "COLE_AQUI_O_ID_DO_D1"
 
 [vars]
 RESEND_FROM = "Oriente One <one@orientesolucoes.com>"

@@ -1,4 +1,4 @@
-// Oriente One v1.0.0 | Motor de cálculo dos assessments
+// Oriente One v1.1.0 | Motor de cálculo dos assessments
 import { INSTRUMENTS } from './instruments.js';
 
 // Faixas do Diagnóstico Organizacional (média 1 a 5)

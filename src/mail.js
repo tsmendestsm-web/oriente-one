@@ -1,4 +1,4 @@
-// Oriente One v1.0.0 | Envio de e-mails via Resend
+// Oriente One v1.1.0 | Envio de e-mails via Resend
 const NAVY = '#0F2A44';
 const TEAL = '#0E9F8E';
 

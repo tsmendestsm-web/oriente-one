@@ -1,4 +1,4 @@
-// Oriente One v1.0.0 | Painel administrativo
+// Oriente One v1.1.0 | Painel administrativo
 import { esc, brl, num, dataBR, mesBR, hoje, compAtual, addComp, api, toast, qrSvg, formData, copiar, baixarCsv, csvNum, VERSION } from './ui.js';
 
 const $app = document.getElementById('app');
@@ -14,6 +14,7 @@ const badgeStatus = (s) => ({
   suspenso: '<span class="badge b-amber">Suspenso</span>', encerrado: '<span class="badge b-gray">Encerrado</span>',
   aberto: '<span class="badge b-teal">Aberto</span>',
 }[s] || `<span class="badge b-gray">${esc(s)}</span>`);
+const rotuloServico = (s) => s.nome + (s.produto && !s.nome.toLowerCase().startsWith(PRODUTO_NOME[s.produto].toLowerCase().slice(0, 16)) ? ` · inclui ${PRODUTO_NOME[s.produto]}` : '');
 const MODALIDADE = { mensal: 'Mensal recorrente', parcelado: 'Parcelado', unico: 'Pagamento único' };
 const PRODUTO_NOME = { org: 'Diagnóstico Organizacional', nr1: 'Diagnóstico NR-1', dsfe: 'Diagnóstico Familiar Sistêmico-Empresarial' };
 const clsBadge = (c) => {
@@ -245,7 +246,8 @@ async function formContrato(clienteId) {
   if (!clientes.length) { toast('Cadastre um cliente ativo antes.', true); return; }
   const m = modal('Novo contrato', `
     <div class="row"><label class="f"><span>Cliente *</span><select name="cliente_id" required>${clientes.map((c) => opt(c.id, c.nome_fantasia || c.razao_social, clienteId)).join('')}</select></label>
-    <label class="f"><span>Serviço contratado</span><select name="servico_id"><option value="">–</option>${servs.filter((s) => s.ativo).map((s) => opt(s.id, s.nome)).join('')}</select></label></div>
+    <label class="f"><span>Serviço contratado *</span><select name="servico_id" required><option value="">Selecione o serviço</option>${servs.filter((s) => s.ativo).map((s) => opt(s.id, rotuloServico(s))).join('')}</select></label></div>
+    <p class="small muted" style="margin-top:-6px">Só o diagnóstico vinculado a este serviço ficará disponível no contrato. Cadastre serviços em Configurações.</p>
     ${field('objeto', 'Objeto do contrato *', '', 'text', 'required placeholder="Ex.: Consultoria em Gestão de Pessoas · 12 meses"')}
     <div class="row"><label class="f"><span>Modalidade de cobrança *</span><select name="modalidade" id="mod">${opt('mensal', 'Mensal recorrente')}${opt('parcelado', 'Parcelado')}${opt('unico', 'Pagamento único')}</select></label>
     ${field('valor', '<span id="lv">Valor mensal (R$) *</span>', '', 'number', 'step="0.01" min="0" required')}
@@ -259,6 +261,7 @@ async function formContrato(clienteId) {
     <label class="f"><span>Observações</span><textarea name="observacoes"></textarea></label>`, {
     wide: true, submit: 'Criar contrato',
     onSubmit: async (d) => {
+      if (!d.servico_id) throw new Error('Selecione o serviço contratado.');
       const r = await api('/contratos', { method: 'POST', body: d });
       toast(r.faturasGeradas ? `Contrato criado com ${r.faturasGeradas} fatura(s) agendada(s).` : 'Contrato criado.');
       location.hash = `#/contratos/${r.id}`;
@@ -280,9 +283,14 @@ async function vContrato(v, id) {
   const k = await api(`/contratos/${id}`);
   const prods = await produtos();
   const sponsor = k.sponsor_nome || k.cliente_sponsor_nome;
+  const prodContratado = k.produto ? prods.find((p) => p.key === k.produto) : null;
+  const motivoDiag = k.status !== 'ativo' ? 'Contrato não está ativo.'
+    : !k.servico ? 'Contrato sem serviço registrado. Edite o contrato e escolha o serviço.'
+    : !prodContratado ? 'O serviço contratado não inclui diagnóstico.'
+    : !prodContratado.disponivel ? `${prodContratado.nome} ainda está em construção.` : '';
   v.innerHTML = topo(`${esc(k.codigo)}`, `${esc(k.cliente)} · ${esc(k.objeto)} ${badgeStatus(k.status)}`,
     `<a class="btn" href="#/contratos">← Contratos</a><button class="btn" id="ed">Editar</button>
-     <button class="btn" id="fav">Fatura avulsa</button><button class="btn primary" id="diag" ${k.status !== 'ativo' ? 'disabled' : ''}>Enviar diagnóstico</button>`) + `
+     <button class="btn" id="fav">Fatura avulsa</button>${prodContratado ? `<button class="btn primary" id="diag" ${motivoDiag ? `disabled title="${esc(motivoDiag)}"` : ''}>Enviar ${esc(prodContratado.nome)}</button>` : ''}`) + `
     <div class="grid g2">
       <div class="card"><h2>Contrato</h2><dl class="dl">
         <dt>Cliente</dt><dd><a href="#/clientes/${k.cliente_id}">${esc(k.cliente)}</a></dd>
@@ -294,24 +302,27 @@ async function vContrato(v, id) {
         <dt>Sponsor</dt><dd>${esc(sponsor || '–')} <span class="small muted">${esc(k.sponsor_email || k.cliente_sponsor_email || '')}</span></dd>
         <dt>Observações</dt><dd>${esc(k.observacoes || '–')}</dd></dl></div>
       <div class="card"><h2>Assessments do contrato</h2>
+        <p class="small" style="margin-top:-4px">Disponível neste contrato: ${prodContratado ? `<b>${esc(prodContratado.nome)}</b> ${prodContratado.disponivel ? '<span class="badge b-green">liberado</span>' : '<span class="badge b-amber">em construção</span>'}` : `<span class="muted">${esc(motivoDiag || 'nenhum diagnóstico')}</span>`}</p>
         ${k.projetos.length ? `<table class="tbl"><tbody>${k.projetos.map((p) => `<tr class="click" onclick="location.hash='#/assessments/${p.id}'"><td><b>${esc(PRODUTO_NOME[p.produto])}</b><div class="small muted">${esc(p.titulo)}</div></td><td class="num">${p.respostas} resp.</td><td>${badgeStatus(p.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Nenhum diagnóstico enviado ainda.</div>'}
-        <div class="small muted" style="margin-top:10px">${prods.map((p) => `${esc(p.nome)}: ${p.disponivel ? '<span class="badge b-green">disponível</span>' : '<span class="badge b-amber">em construção</span>'}`).join(' · ')}</div>
       </div>
     </div>
     <div class="card"><h2>Faturas do contrato</h2>${tabelaFaturas(k.faturas.map((f) => ({ ...f, cliente: k.cliente, situacao: f.status === 'aberta' ? (f.vencimento < hoje() ? 'vencida' : 'a_vencer') : f.status })), false)}</div>`;
-  v.querySelector('#ed').onclick = () => editarContrato(k, () => vContrato(v, id));
+  v.querySelector('#ed').onclick = async () => editarContrato(k, await servicos(), () => vContrato(v, id));
   v.querySelector('#fav').onclick = () => modal('Fatura avulsa', `
       <input type="hidden" name="contrato_id" value="${k.id}">
       ${field('descricao', 'Descrição', k.objeto)}
       <div class="row">${field('valor', 'Valor (R$) *', '', 'number', 'step="0.01" min="0" required')}${field('vencimento', 'Vencimento *', '', 'date', 'required')}${field('competencia', 'Competência', compAtual(), 'month')}</div>`,
     { submit: 'Criar fatura', onSubmit: async (d) => { await api('/faturas', { method: 'POST', body: d }); toast('Fatura criada.'); vContrato(v, id); } });
-  v.querySelector('#diag').onclick = () => enviarDiagnostico(k, prods);
+  v.querySelector('#diag')?.addEventListener('click', () => enviarDiagnostico(k, prodContratado));
   ligarTabelas(v, () => vContrato(v, id));
 }
 
-function editarContrato(k, done) {
+function editarContrato(k, servs, done) {
+  const travado = k.projetos.length > 0;
   modal(`Editar ${k.codigo}`, `
     ${field('objeto', 'Objeto', k.objeto)}
+    <label class="f"><span>Serviço contratado</span><select name="servico_id" ${travado ? 'disabled' : ''}>${k.servico_id ? '' : '<option value="">Selecione o serviço</option>'}${servs.filter((s) => s.ativo || s.id === k.servico_id).map((s) => opt(s.id, rotuloServico(s), k.servico_id)).join('')}</select>
+    ${travado ? '<small class="muted">Serviço travado: o contrato já tem diagnóstico enviado.</small>' : ''}</label>
     <div class="row">${field('valor', k.modalidade === 'mensal' ? 'Valor mensal (R$)' : 'Valor total (R$)', k.valor, 'number', 'step="0.01"')}
     ${k.modalidade === 'mensal' ? field('dia_vencimento', 'Dia de vencimento', k.dia_vencimento, 'number', 'min="1" max="31"') : ''}
     ${field('data_fim', 'Término', k.data_fim || '', 'date')}
@@ -319,15 +330,14 @@ function editarContrato(k, done) {
     <div class="row">${field('sponsor_nome', 'Sponsor', k.sponsor_nome || '')}${field('sponsor_email', 'E-mail do sponsor', k.sponsor_email || '', 'email')}</div>
     <label class="f"><span>Observações</span><textarea name="observacoes">${esc(k.observacoes || '')}</textarea></label>
     ${k.modalidade !== 'mensal' ? '<p class="small muted">Alterar o valor não muda faturas já agendadas. Edite as faturas em aberto individualmente se necessário.</p>' : '<p class="small muted">O novo valor vale para as próximas competências geradas.</p>'}`,
-  { wide: true, onSubmit: async (d) => { await api(`/contratos/${k.id}`, { method: 'PUT', body: d }); toast('Contrato atualizado.'); done(); } });
+  { wide: true, onSubmit: async (d) => { if (d.servico_id === '') delete d.servico_id; await api(`/contratos/${k.id}`, { method: 'PUT', body: d }); toast('Contrato atualizado.'); done(); } });
 }
 
-function enviarDiagnostico(k, prods) {
-  const sugerido = k.produto && prods.find((p) => p.key === k.produto && p.disponivel) ? k.produto : prods.find((p) => p.disponivel)?.key;
-  const m = modal('Enviar diagnóstico ao sponsor', `
-    <p class="muted" style="margin-top:0">O sponsor recebe por e-mail uma página com os QR Codes e links para distribuir aos participantes.</p>
-    <label class="f"><span>Diagnóstico *</span><select name="produto">${prods.map((p) => `<option value="${p.key}" ${p.key === sugerido ? 'selected' : ''} ${p.disponivel ? '' : 'disabled'}>${esc(p.nome)}${p.disponivel ? '' : ' (em construção)'}</option>`).join('')}</select></label>
-    <div id="nr1info" class="note info" style="display:none">O Diagnóstico NR-1 gera dois links: Formulário A (Liderança: gestores, SST e RH) e Formulário B (Colaboradores, anônimo). Índice consolidado = A × 40% + B × 60%.</div>
+function enviarDiagnostico(k, prod) {
+  modal(`Enviar ${prod.nome}`, `
+    <p class="muted" style="margin-top:0">Diagnóstico contratado em <b>${esc(k.codigo)}</b> (${esc(k.servico)}). O sponsor recebe por e-mail uma página com os QR Codes e links para distribuir aos participantes.</p>
+    <input type="hidden" name="produto" value="${esc(prod.key)}">
+    ${prod.key === 'nr1' ? '<div class="note info">O Diagnóstico NR-1 gera dois links: Formulário A (Liderança: gestores, SST e RH) e Formulário B (Colaboradores, anônimo). Índice consolidado = A × 40% + B × 60%.</div>' : ''}
     <div class="row">${field('sponsor_nome', 'Sponsor *', k.sponsor_nome || k.cliente_sponsor_nome || '', 'text', 'required')}${field('sponsor_email', 'E-mail do sponsor *', k.sponsor_email || k.cliente_sponsor_email || '', 'email', 'required')}</div>
     <div class="row">${field('unidade', 'Unidade / filial (opcional)', '')}${field('prazo', 'Prazo para respostas', '', 'date')}</div>
     <input type="hidden" name="contrato_id" value="${k.id}">
@@ -340,9 +350,6 @@ function enviarDiagnostico(k, prods) {
       location.hash = `#/assessments/${r.id}`;
     },
   });
-  const f = m.el.querySelector('form');
-  const sync = () => (f.querySelector('#nr1info').style.display = f.produto.value === 'nr1' ? '' : 'none');
-  f.produto.onchange = sync; sync();
 }
 
 // ------------------------------------------------------------------ faturas
@@ -548,7 +555,7 @@ async function vProjeto(v, id, tab = 'links') {
     `<a class="btn" href="#/assessments">← Assessments</a>
      <button class="btn" id="st">${p.status === 'aberto' ? 'Encerrar coleta' : 'Reabrir coleta'}</button>
      <button class="btn primary" id="env">${p.enviado_em ? 'Reenviar ao sponsor' : 'Enviar ao sponsor'}</button>`) + `
-    <div class="tabs"><a href="#/assessments/${id}/links" class="${tab === 'links' ? 'on' : ''}">Links e QR Codes</a><a href="#/assessments/${id}/resultado" class="${tab === 'resultado' ? 'on' : ''}">Resultado</a></div>
+    <div class="tabs"><a href="#/assessments/${id}/links" class="${tab === 'links' ? 'on' : ''}">Links e QR Codes</a><a href="#/assessments/${id}/resultado" class="${tab === 'resultado' ? 'on' : ''}">Resultado</a>${p.produto === 'org' ? `<a href="#/assessments/${id}/diagnostico" class="${tab === 'diagnostico' ? 'on' : ''}">Diagnóstico EXPLORE</a>` : ''}</div>
     <div id="pv"></div>`;
   v.querySelector('#env').onclick = async () => { try { await api(`/projetos/${id}/enviar`, { method: 'POST' }); toast('E-mail enviado ao sponsor.'); vProjeto(v, id, tab); } catch (e) { toast(e.message, true); } };
   v.querySelector('#st').onclick = async () => { await api(`/projetos/${id}`, { method: 'PUT', body: { status: p.status === 'aberto' ? 'encerrado' : 'aberto' } }); vProjeto(v, id, tab); };
@@ -566,6 +573,7 @@ async function vProjeto(v, id, tab = 'links') {
     box.querySelectorAll('[data-copy]').forEach((b) => (b.onclick = () => copiar(b.dataset.copy)));
     return;
   }
+  if (tab === 'diagnostico') return vDiagnostico(box, id, () => vProjeto(v, id, 'diagnostico'));
   const r = await api(`/projetos/${id}/resultado`);
   box.innerHTML = renderResultado(r, p);
   box.querySelectorAll('[data-csv]').forEach((b) => (b.onclick = () => (location.href = `/api/projetos/${id}/export.csv?instrumento=${b.dataset.csv}`)));
@@ -619,6 +627,146 @@ function renderResultado(r, p) {
   return '<div class="card empty">Sem cálculo disponível.</div>';
 }
 
+// ------------------------------------------------------------------ motor do Diagnóstico EXPLORE
+const f1 = (v) => (v == null ? '–' : num(v, 1));
+const corAval = (a) => ({ 'Muito boa': 'b-green', Boa: 'b-blue', 'Em desenvolvimento': 'b-red' }[a] || 'b-gray');
+const negrito = (t) => esc(t).replace(/\*\*([^*]+)\*\*/g, '<b style="color:var(--navy)">$1</b>');
+
+async function vDiagnostico(box, id, reload) {
+  const D = await api(`/projetos/${id}/diagnostico`);
+  const dg = D.diagnostico;
+  const acoes = `
+    ${D.ia ? `<button class="btn ${dg ? '' : 'primary'}" data-a="ia">${dg ? 'Regenerar com IA' : 'Gerar com IA'}</button>` : ''}
+    <button class="btn ${!dg && !D.ia ? 'primary' : ''}" data-a="claude">${dg ? 'Regenerar via Claude' : 'Gerar via Claude'}</button>
+    ${dg ? '<button class="btn" data-a="editar">Editar texto</button><button class="btn" onclick="print()">Imprimir</button><button class="btn primary" data-a="pptx">Exportar PPTX</button>' : ''}`;
+  if (!dg) {
+    box.innerHTML = `<div class="card"><h2>Motor de Geração do Diagnóstico Organizacional EXPLORE</h2>
+      <p>O motor lê as <b>${D.respostasAtuais}</b> resposta(s) recebida(s) neste link, calcula o score global e os 5 pilares do Prompt Mestre (Estratégia, Pessoas, Operações, Financeiro e Governança) e gera o relatório executivo: leitura geral, forças, gargalos, análise por pilar, recomendações, roadmap 30/60/90 e OKRs.</p>
+      <p class="muted small">Os números são calculados pela plataforma e não passam pela IA. A IA escreve apenas a análise, seguindo o Prompt Mestre. Nomes e e-mails dos respondentes não são enviados.</p>
+      ${!D.ia ? '<div class="note info">Geração automática desativada: falta a chave <b>GEMINI_API_KEY</b> (gratuita no Google AI Studio). Enquanto isso, use "Gerar via Claude": a plataforma monta o prompt completo, você cola no Claude e devolve o resultado.</div>' : ''}
+      ${D.respostasAtuais ? `<div class="top" style="justify-content:flex-start;margin:0"><div class="actions no-print">${acoes}</div></div>` : '<div class="note">Ainda não há respostas para gerar o diagnóstico.</div>'}</div>`;
+  } else {
+    const b = dg.base, d = dg.conteudo;
+    const desatualizado = D.respostasAtuais !== dg.n_respostas;
+    const horizonte = (lista, titulo, cls, ini) => `<h3 style="margin:14px 0 6px"><span class="badge ${cls}">${titulo}</span></h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Prio</th><th>Frente</th><th>Decisão</th><th>Ação objetiva</th><th>Responsável</th><th>Indicador</th><th>Prazo</th></tr></thead><tbody>
+      ${lista.map((a, i) => `<tr><td><b>P${ini + i}</b></td><td>${esc(a.frente)}</td><td>${esc(a.decisao)}</td><td>${esc(a.acao)}</td><td>${esc(a.responsavel)}</td><td>${esc(a.indicador)}</td><td class="nowrap">${esc(a.prazo)}</td></tr>`).join('')}</tbody></table></div>`;
+    box.innerHTML = `
+      <div class="top" style="margin-bottom:12px"><div class="small muted">Versão <b>PPT${esc(dg.versao)}</b> · gerado em ${dataBR(dg.gerado_em)} ${dg.fonte === 'gemini' ? `com IA (${esc(dg.modelo)})` : 'via Claude'} · ${dg.n_respostas} resposta(s)${dg.editado_em ? ` · editado em ${dataBR(dg.editado_em)}` : ''}</div><div class="actions no-print">${acoes}</div></div>
+      ${desatualizado ? `<div class="note">Chegaram novas respostas depois da geração (${dg.n_respostas} → ${D.respostasAtuais}). Regenere para incluir no diagnóstico.</div>` : ''}
+      <div class="card"><h2>01 · Leitura Geral</h2>
+        <div class="grid" style="grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:14px">
+          <div class="kpi navy"><div class="l">Score Global</div><div class="v">${f1(b.scoreGlobal)}</div><div class="s"><span class="badge ${corAval(b.avaliacaoGlobal)}">${esc(b.avaliacaoGlobal)}</span></div></div>
+          ${b.pilares.map((p) => `<div class="kpi"><div class="l">${esc(p.nome)}${p.indicativo ? '*' : ''}</div><div class="v">${f1(p.score)}</div><div class="s"><span class="badge ${corAval(p.avaliacao)}">${esc(p.avaliacao)}</span></div></div>`).join('')}
+        </div>
+        <p class="quote" style="font-style:italic">${esc(d.frase_capa)}</p>
+        <p>${esc(d.leitura.cenario)}</p>
+        <div class="grid g2"><div><h3>O que a organização tem</h3><p>${esc(d.leitura.tem)}</p></div><div><h3>O que está bloqueando</h3><p>${esc(d.leitura.bloqueia)}</p></div></div>
+        <p class="small muted">Perfil: ${esc(b.perfil.setor || 'setor não informado')} · ${esc(b.perfil.porte || '–')} colaboradores · ${esc(b.perfil.maturidade || '–')} de operação · ${b.n} respondente(s)</p></div>
+      <div class="grid g2">
+        <div class="card"><h2>02 · Forças</h2>${d.forcas.map((f, i) => `<div style="margin-bottom:10px"><b>F${i + 1} · ${esc(f.titulo)}</b><div>${esc(f.texto)}</div></div>`).join('')}</div>
+        <div class="card"><h2>03 · Gargalos</h2>${d.gargalos.map((g, i) => `<div style="margin-bottom:10px"><b style="color:var(--red)">G${i + 1} · ${esc(g.titulo)}</b><div>${esc(g.texto)}</div><div class="small muted"><i>${esc(g.evidencia)}</i></div></div>`).join('')}</div>
+      </div>
+      <div class="card"><h2>04 · Análise por Pilar</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Pilar</th><th class="num">Score</th><th>Avaliação</th><th>Destaque e análise</th></tr></thead><tbody>
+        ${b.pilares.map((p, i) => `<tr><td><b>${esc(p.nome)}${p.indicativo ? '*' : ''}</b><div class="small muted">${esc(p.questoes.join(', '))}</div></td><td class="num">${f1(p.score)}</td><td><span class="badge ${corAval(p.avaliacao)}">${esc(p.avaliacao)}</span></td><td><b>${esc(d.pilares[i]?.destaque)}</b><div class="small">${esc(d.pilares[i]?.analise)}</div></td></tr>`).join('')}
+        </tbody></table></div><p class="small muted">* Financeiro indicativo: o assessment não tem bloco financeiro dedicado; combina Q23 com a percepção de crescimento (Q5) e tendência (Q35). Questões 32 e 33 com pontuação invertida.</p></div>
+      <div class="card"><h2>05 · Recomendações Estratégicas</h2>${d.recomendacoes.map((r, i) => `<div style="margin-bottom:8px"><b>R${i + 1} · ${esc(r.titulo)}</b><div>${esc(r.texto)}</div></div>`).join('')}</div>
+      <div class="card"><h2>06 · Roadmap de Decisão Dura</h2>${horizonte(d.roadmap.d30, '30 dias · Crítico', 'b-red', 1)}${horizonte(d.roadmap.d60, '60 dias · Urgente', 'b-amber', 4)}${horizonte(d.roadmap.d90, '90 dias · Importante', 'b-blue', 7)}</div>
+      <div class="card"><h2>07 · OKRs</h2><div class="grid g3">${d.okrs.map((o, i) => `<div><h3>O${i + 1} · ${esc(o.objetivo)}</h3><ul style="padding-left:18px;margin:6px 0">${o.krs.map((k, j) => `<li><b>KR${i + 1}.${j + 1}</b> ${esc(k)}</li>`).join('')}</ul></div>`).join('')}</div></div>
+      <div class="card"><h2>08 · Conclusão Executiva</h2><h3 style="font-size:16px;margin-bottom:8px">${esc(d.conclusao.headline)}</h3><p>${negrito(d.conclusao.corpo)}</p><p class="quote" style="font-style:italic">${esc(d.conclusao.frase)}</p>
+        <h3>Próximos passos</h3><ol>${d.conclusao.proximos_passos.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+  }
+  const on = (a, fn) => box.querySelectorAll(`[data-a="${a}"]`).forEach((b) => (b.onclick = fn));
+  on('ia', async (e) => {
+    if (dg && !confirmar('Gerar de novo substitui o texto atual, inclusive suas edições. Continuar?')) return;
+    const b = e.target; b.disabled = true; b.textContent = 'Gerando… (até 1 minuto)';
+    try { await api(`/projetos/${id}/diagnostico/gerar`, { method: 'POST' }); toast('Diagnóstico gerado.'); reload(); }
+    catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Gerar com IA'; }
+  });
+  on('claude', () => gerarViaClaude(id, !!dg, reload));
+  on('editar', () => editarDiagnostico(id, dg, reload));
+  on('pptx', (e) => exportarPptx(dg, e.target));
+}
+
+async function gerarViaClaude(id, existe, reload) {
+  const { prompt } = await api(`/projetos/${id}/diagnostico/prompt`);
+  const m = modal('Gerar via Claude', `
+    <p style="margin-top:0"><b>1.</b> Copie o prompt (Prompt Mestre + dados do assessment, sem nomes de respondentes) e cole numa conversa nova no Claude.</p>
+    <div style="display:flex;gap:8px;margin-bottom:6px"><button type="button" class="btn primary" id="cp">Copiar prompt</button><span class="small muted" style="align-self:center">${prompt.length.toLocaleString('pt-BR')} caracteres</span></div>
+    <textarea readonly style="min-height:140px;font-size:12px" class="mono">${esc(prompt)}</textarea>
+    <p><b>2.</b> Cole aqui a resposta completa do Claude (o JSON). A plataforma confere o formato e ajusta os tamanhos para os slides.</p>
+    <textarea name="texto" required style="min-height:160px;font-size:12px" class="mono" placeholder='{ "frase_capa": "...", ... }'></textarea>
+    ${existe ? '<p class="small" style="color:var(--red)">Importar substitui o diagnóstico atual, inclusive suas edições.</p>' : ''}`,
+  { wide: true, submit: 'Importar diagnóstico', onSubmit: async (d) => {
+    if (!d.texto.trim()) throw new Error('Cole a resposta do Claude.');
+    await api(`/projetos/${id}/diagnostico/importar`, { method: 'POST', body: { texto: d.texto } }); toast('Diagnóstico importado.'); reload();
+  } });
+  m.el.querySelector('#cp').onclick = () => copiar(prompt);
+}
+
+// Campos editáveis com o limite de caracteres que garante o encaixe nos slides
+function camposDiagnostico(d) {
+  const C = [];
+  const add = (sec, label, path, max, area = false) => C.push({ sec, label, path, max, area });
+  add('Leitura geral', 'Frase de impacto (slide 01)', 'frase_capa', 110);
+  add('Leitura geral', 'Leitura geral do cenário', 'leitura.cenario', 650, true);
+  add('Leitura geral', 'O que a organização tem', 'leitura.tem', 320, true);
+  add('Leitura geral', 'O que está bloqueando', 'leitura.bloqueia', 320, true);
+  d.forcas.forEach((_, i) => { add('Forças', `F${i + 1} · título`, `forcas.${i}.titulo`, 45); add('Forças', `F${i + 1} · texto`, `forcas.${i}.texto`, 230, true); });
+  d.gargalos.forEach((_, i) => { add('Gargalos', `G${i + 1} · título`, `gargalos.${i}.titulo`, 55); add('Gargalos', `G${i + 1} · texto`, `gargalos.${i}.texto`, 200, true); add('Gargalos', `G${i + 1} · evidência`, `gargalos.${i}.evidencia`, 120); });
+  d.pilares.forEach((p, i) => { add('Pilares', `${p.pilar} · destaque (tabela)`, `pilares.${i}.destaque`, 100); add('Pilares', `${p.pilar} · análise`, `pilares.${i}.analise`, 380, true); });
+  d.recomendacoes.forEach((_, i) => { add('Recomendações', `R${i + 1} · título`, `recomendacoes.${i}.titulo`, 55); add('Recomendações', `R${i + 1} · texto`, `recomendacoes.${i}.texto`, 130, true); });
+  let n = 0;
+  for (const h of ['d30', 'd60', 'd90']) d.roadmap[h].forEach((_, i) => { n++; const sec = `Roadmap ${h.slice(1)} dias`;
+    add(sec, `P${n} · frente`, `roadmap.${h}.${i}.frente`, 30); add(sec, `P${n} · decisão`, `roadmap.${h}.${i}.decisao`, 120); add(sec, `P${n} · ação objetiva (slide)`, `roadmap.${h}.${i}.acao`, 75);
+    add(sec, `P${n} · responsável`, `roadmap.${h}.${i}.responsavel`, 20); add(sec, `P${n} · indicador`, `roadmap.${h}.${i}.indicador`, 80); add(sec, `P${n} · prazo`, `roadmap.${h}.${i}.prazo`, 12); });
+  d.okrs.forEach((o, i) => { add('OKRs', `O${i + 1} · objetivo`, `okrs.${i}.objetivo`, 60); o.krs.forEach((_, j) => add('OKRs', `KR${i + 1}.${j + 1}`, `okrs.${i}.krs.${j}`, 100)); });
+  add('Conclusão', 'Headline', 'conclusao.headline', 140, true);
+  add('Conclusão', 'Corpo (marque um trecho com **negrito**)', 'conclusao.corpo', 300, true);
+  add('Conclusão', 'Frase de fechamento', 'conclusao.frase', 110);
+  d.conclusao.proximos_passos.forEach((_, i) => add('Conclusão', `Próximo passo ${i + 1}`, `conclusao.proximos_passos.${i}`, 95));
+  return C;
+}
+const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+const setPath = (o, p, v) => { const ks = p.split('.'); const last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; };
+
+function editarDiagnostico(id, dg, reload) {
+  const d = JSON.parse(JSON.stringify(dg.conteudo));
+  const campos = camposDiagnostico(d);
+  let sec = '';
+  const html = campos.map((c, i) => {
+    const head = c.sec !== sec ? `<h3 style="margin:18px 0 8px;color:var(--teal-2)">${esc((sec = c.sec))}</h3>` : '';
+    const v = getPath(d, c.path) ?? '';
+    const max = c.path === 'conclusao.corpo' ? c.max + 40 : c.max;
+    return `${head}<label class="f"><span>${esc(c.label)} <em class="cnt" data-i="${i}" style="font-style:normal;float:right">${String(v).length}/${c.max}</em></span>${c.area ? `<textarea name="f${i}" maxlength="${max}" style="min-height:64px">${esc(v)}</textarea>` : `<input name="f${i}" maxlength="${max}" value="${esc(v)}">`}</label>`;
+  }).join('');
+  const m = modal('Editar diagnóstico', `<div class="row"><label class="f"><span>Versão do documento (aparece como PPT____)</span><input name="versao" value="${esc(dg.versao || '')}" maxlength="20"></label></div>
+    <p class="small muted" style="margin-top:-4px">O contador mostra o limite de cada campo: acima dele o texto não cabe no slide. Scores e avaliações são calculados e não se editam aqui.</p>${html}`,
+  { wide: true, submit: 'Salvar edição', onSubmit: async (f) => {
+    campos.forEach((c, i) => setPath(d, c.path, f[`f${i}`]));
+    await api(`/projetos/${id}/diagnostico`, { method: 'PUT', body: { conteudo: d, versao: f.versao } }); toast('Diagnóstico atualizado.'); reload();
+  } });
+  m.el.addEventListener('input', (e) => {
+    const n = e.target.name?.match(/^f(\d+)$/); if (!n) return;
+    const c = campos[n[1]]; const len = e.target.value.replace(/\*\*/g, '').length;
+    const el = m.el.querySelector(`.cnt[data-i="${n[1]}"]`); el.textContent = `${len}/${c.max}`; el.style.color = len > c.max ? 'var(--red)' : '';
+  });
+}
+
+function carregarScript(src) {
+  return new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => err(new Error('Falha ao carregar ' + src)); document.head.appendChild(s); });
+}
+async function exportarPptx(dg, btn) {
+  btn.disabled = true; const t = btn.textContent; btn.textContent = 'Gerando PPTX…';
+  try {
+    if (!window.PptxGenJS) await carregarScript('/vendor/pptxgen.bundle.js');
+    const { montarDeck, nomeArquivo } = await import('/deck.js?v=1.1.0');
+    const pres = montarDeck(window.PptxGenJS, { conteudo: dg.conteudo, base: dg.base, versao: dg.versao, data: new Date() });
+    await pres.writeFile({ fileName: nomeArquivo({ versao: dg.versao, empresa: dg.base.empresa }) });
+    toast('PPTX gerado.');
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = t; }
+}
+
 // ------------------------------------------------------------------ configurações
 async function vConfig(v) {
   const [org, users, servs] = await Promise.all([api('/org'), api('/users'), api('/servicos')]);
@@ -636,6 +784,7 @@ async function vConfig(v) {
       <div class="card"><h2>Integrações</h2><dl class="dl">
         <dt>E-mail (Resend)</dt><dd>${S.me.resend ? '<span class="badge b-green">ativo</span>' : '<span class="badge b-red">sem RESEND_API_KEY</span>'}</dd>
         <dt>Boleto registrado (Asaas)</dt><dd>${S.me.asaas ? '<span class="badge b-green">ativo</span> baixa automática por webhook' : '<span class="badge b-gray">desativado</span> cobrança por PIX e baixa manual'}</dd>
+        <dt>IA do diagnóstico (Gemini)</dt><dd>${S.me.ia ? '<span class="badge b-green">ativa</span>' : '<span class="badge b-gray">sem GEMINI_API_KEY</span> use "Gerar via Claude"'}</dd>
         <dt>Webhook Asaas</dt><dd class="mono">${location.origin}/api/webhooks/asaas</dd></dl>
         <p class="small muted">As chaves ficam nos secrets do Cloudflare Pages, nunca no código. Veja o README.</p></div>
     </div>

@@ -16,3 +16,4 @@ CREATE TABLE IF NOT EXISTS campanhas ( id INTEGER PRIMARY KEY AUTOINCREMENT, pro
 CREATE TABLE IF NOT EXISTS respostas ( id INTEGER PRIMARY KEY AUTOINCREMENT, campanha_id INTEGER NOT NULL REFERENCES campanhas(id), perfil TEXT, respostas TEXT, created_at TEXT DEFAULT (datetime('now')) );
 CREATE INDEX IF NOT EXISTS ix_respostas_camp ON respostas(campanha_id);
 CREATE TABLE IF NOT EXISTS eventos ( id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER, user_id INTEGER, tipo TEXT NOT NULL, ref TEXT, detalhe TEXT, created_at TEXT DEFAULT (datetime('now')) );
+CREATE TABLE IF NOT EXISTS diagnosticos ( id INTEGER PRIMARY KEY AUTOINCREMENT, projeto_id INTEGER NOT NULL UNIQUE REFERENCES projetos(id), org_id INTEGER NOT NULL REFERENCES orgs(id), versao TEXT, conteudo TEXT NOT NULL, base TEXT, fonte TEXT, modelo TEXT, n_respostas INTEGER, gerado_por INTEGER, gerado_em TEXT DEFAULT (datetime('now')), editado_em TEXT );

@@ -1,11 +1,12 @@
-// Oriente One v1.0.0 | API (Cloudflare Pages Functions + D1)
+// Oriente One v1.1.0 | API (Cloudflare Pages Functions + D1)
 import { INSTRUMENTS, PRODUTOS } from './instruments.js';
 import { resultadoOrg, resultadoNR1 } from './scoring.js';
 import { pixCopiaCola } from './pix.js';
 import { asaasAtivo, garantirCliente, emitirBoleto, cancelarBoleto } from './asaas.js';
 import { enviarEmail, layout, botao } from './mail.js';
+import { calcularBase, montarPrompt, normalizar, gerarComGemini, PILARES } from './motor-org.js';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 // ---------------------------------------------------------------- utilidades
 const json = (data, status = 200, headers = {}) =>
@@ -128,7 +129,7 @@ export async function handle(request, env) {
     ctx.user = user;
     const org = user.org_id;
 
-    if (path === '/me') return json({ user, version: VERSION, asaas: asaasAtivo(env), resend: !!env.RESEND_API_KEY });
+    if (path === '/me') return json({ user, version: VERSION, asaas: asaasAtivo(env), resend: !!env.RESEND_API_KEY, ia: !!env.GEMINI_API_KEY });
     if (path === '/dashboard') return dashboard(ctx);
 
     // Organização / usuários
@@ -217,6 +218,14 @@ export async function handle(request, env) {
     if (path === '/instrumentos' && method === 'GET') return json(INSTRUMENTS);
     if (path === '/projetos' && method === 'GET') return listarProjetos(ctx);
     if (path === '/projetos' && method === 'POST') return criarProjeto(ctx);
+    if ((m = path.match(/^\/projetos\/(\d+)\/diagnostico(?:\/(\w+))?$/))) {
+      const id = Number(m[1]); const acao = m[2];
+      if (!acao && method === 'GET') return verDiagnostico(ctx, id);
+      if (!acao && method === 'PUT') return salvarDiagnostico(ctx, id);
+      if (acao === 'gerar' && method === 'POST') return gerarDiagnostico(ctx, id);
+      if (acao === 'prompt' && method === 'GET') return promptDiagnostico(ctx, id);
+      if (acao === 'importar' && method === 'POST') return importarDiagnostico(ctx, id);
+    }
     if ((m = path.match(/^\/projetos\/(\d+)(?:\/([\w.]+))?$/))) {
       const id = Number(m[1]); const acao = m[2];
       if (!acao && method === 'GET') return detalheProjeto(ctx, id);
@@ -365,10 +374,12 @@ async function criarContrato({ env, user, body }) {
   if (!body.objeto) fail('Descreva o objeto do contrato.');
   const parcelas = modalidade === 'parcelado' ? Math.max(1, Math.min(60, Number(body.parcelas) || 1)) : 1;
   const primeiro = modalidade === 'mensal' ? null : (isDate(body.primeiro_vencimento) ? body.primeiro_vencimento : fail('Informe o primeiro vencimento.'));
-  const servico = body.servico_id ? await one(env, 'SELECT * FROM servicos WHERE id=? AND org_id=?', Number(body.servico_id), org) : null;
+  // O contrato registra exatamente um serviço cadastrado e ativo; é ele que define o que fica disponível.
+  const servico = body.servico_id ? await one(env, 'SELECT * FROM servicos WHERE id=? AND org_id=? AND ativo=1', Number(body.servico_id), org) : null;
+  if (!servico) fail('Selecione o serviço contratado (apenas serviços cadastrados e ativos).');
 
   const id = await insert(env, 'contratos', {
-    org_id: org, cliente_id: cli.id, servico_id: servico?.id || null,
+    org_id: org, cliente_id: cli.id, servico_id: servico.id,
     codigo: await proximoCodigo(env, org), objeto: body.objeto.trim(), modalidade, valor, parcelas,
     dia_vencimento: Math.max(1, Math.min(31, Number(body.dia_vencimento) || 10)),
     data_inicio: body.data_inicio, data_fim: isDate(body.data_fim) ? body.data_fim : null, primeiro_vencimento: primeiro,
@@ -401,6 +412,17 @@ async function editarContrato({ env, user, body }, id) {
   const d = pick(body, ['objeto', 'servico_id', 'valor', 'dia_vencimento', 'data_fim', 'status', 'sponsor_nome', 'sponsor_email', 'observacoes']);
   if (d.status && !['ativo', 'suspenso', 'encerrado'].includes(d.status)) fail('Status inválido.');
   if (d.valor !== undefined) d.valor = r2(d.valor);
+  if (d.servico_id !== undefined) {
+    const atual = await one(env, 'SELECT servico_id FROM contratos WHERE id=? AND org_id=?', id, user.org_id);
+    if (!atual) fail('Contrato não encontrado.', 404);
+    if (Number(d.servico_id) !== atual.servico_id) {
+      const s = await one(env, 'SELECT id FROM servicos WHERE id=? AND org_id=? AND ativo=1', Number(d.servico_id), user.org_id);
+      if (!s) fail('Serviço inválido ou inativo.');
+      const p = await one(env, 'SELECT COUNT(*) n FROM projetos WHERE contrato_id=?', id);
+      if (p.n) fail('Este contrato já tem diagnóstico enviado. O serviço não pode mais ser trocado.');
+      d.servico_id = s.id;
+    } else delete d.servico_id;
+  }
   await update(env, 'contratos', id, user.org_id, d);
   await log(env, user, 'contrato.editado', id, d);
   return json({ ok: true });
@@ -718,9 +740,13 @@ async function listarProjetos({ env, user, q }) {
 
 async function criarProjeto(ctx) {
   const { env, user, body } = ctx;
-  const k = await one(env, 'SELECT k.*, c.razao_social, c.nome_fantasia, c.sponsor_nome csn, c.sponsor_email cse FROM contratos k JOIN clientes c ON c.id=k.cliente_id WHERE k.id=? AND k.org_id=?', Number(body.contrato_id), user.org_id);
+  const k = await one(env, 'SELECT k.*, c.razao_social, c.nome_fantasia, c.sponsor_nome csn, c.sponsor_email cse, s.produto servico_produto, s.nome servico_nome FROM contratos k JOIN clientes c ON c.id=k.cliente_id LEFT JOIN servicos s ON s.id=k.servico_id WHERE k.id=? AND k.org_id=?', Number(body.contrato_id), user.org_id);
   if (!k) fail('Contrato não encontrado.');
   if (k.status !== 'ativo') fail('O contrato precisa estar ativo para enviar assessments.');
+  // Só o diagnóstico vinculado ao serviço contratado pode ser enviado
+  if (!k.servico_produto) fail(`O serviço contratado${k.servico_nome ? ` (${k.servico_nome})` : ''} não inclui diagnóstico.`);
+  if (body.produto && body.produto !== k.servico_produto) fail('Este diagnóstico não faz parte do serviço contratado.');
+  body.produto = k.servico_produto;
   const prod = PRODUTOS[body.produto];
   if (!prod) fail('Selecione o diagnóstico.');
   if (prod.instrumentos.some((i) => INSTRUMENTS[i].emConstrucao)) fail(`${prod.nome} ainda está em construção: o questionário não foi carregado na plataforma.`);
@@ -885,4 +911,77 @@ async function publicSponsor({ env, origin }, t) {
     sponsor: p.sponsor_nome, prazo: p.prazo, status: p.status,
     campanhas: camps.map((c) => ({ nome: INSTRUMENTS[c.instrumento].nome, publico: INSTRUMENTS[c.instrumento].audience || 'Participantes', anonimo: INSTRUMENTS[c.instrumento].anonimo, url: `${origin}/a/${c.token}`, respostas: c.respostas, meta: c.meta_respostas })),
   });
+}
+
+// ---------------------------------------------------------------- motor do Diagnóstico Organizacional
+async function contextoDiagnostico(env, id, org) {
+  const p = await projetoCompleto(env, id, org);
+  if (p.produto !== 'org') fail('O motor de geração se aplica ao Diagnóstico Organizacional.');
+  const camp = p.campanhas.find((c) => c.instrumento === 'org');
+  const respostas = await respostasDo(env, camp.id);
+  if (!respostas.length) fail('Ainda não há respostas para gerar o diagnóstico.');
+  const base = calcularBase({ empresa: p.nome_fantasia || p.cliente, unidade: p.unidade, respostas });
+  base.razao_social = p.cliente;
+  return { p, base };
+}
+async function proximaVersao(env, org) {
+  const ano = hojeBR().slice(0, 4);
+  const r = await one(env, "SELECT COUNT(*) n FROM diagnosticos WHERE org_id=? AND substr(gerado_em,1,4)=?", org, ano);
+  return `${ano}.${(r?.n || 0) + 1}`;
+}
+async function gravarDiagnostico(env, user, id, { conteudo, base, fonte, modelo }) {
+  const atual = await one(env, 'SELECT id, versao FROM diagnosticos WHERE projeto_id=?', id);
+  const dados = { conteudo: JSON.stringify(conteudo), base: JSON.stringify(base), fonte, modelo: modelo || null, n_respostas: base.n, gerado_por: user.id };
+  if (atual) {
+    await run(env, "UPDATE diagnosticos SET conteudo=?, base=?, fonte=?, modelo=?, n_respostas=?, gerado_por=?, gerado_em=datetime('now'), editado_em=NULL WHERE id=?",
+      dados.conteudo, dados.base, fonte, dados.modelo, base.n, user.id, atual.id);
+  } else {
+    await insert(env, 'diagnosticos', { projeto_id: id, org_id: user.org_id, versao: await proximaVersao(env, user.org_id), ...dados });
+  }
+  await log(env, user, 'diagnostico.gerado', id, { fonte, n: base.n });
+}
+
+async function verDiagnostico({ env, user }, id) {
+  const p = await projetoCompleto(env, id, user.org_id);
+  const d = await one(env, 'SELECT * FROM diagnosticos WHERE projeto_id=? AND org_id=?', id, user.org_id);
+  const camp = p.campanhas.find((c) => c.instrumento === 'org');
+  return json({
+    projeto: { id: p.id, produto: p.produto, cliente: p.cliente, empresa: p.nome_fantasia || p.cliente, unidade: p.unidade, contrato: p.contrato },
+    respostasAtuais: camp?.respostas || 0,
+    ia: !!env.GEMINI_API_KEY,
+    pilaresDef: PILARES.map((x) => ({ nome: x.nome, questoes: x.itens, indicativo: !!x.indicativo })),
+    diagnostico: d ? { ...d, conteudo: JSON.parse(d.conteudo), base: JSON.parse(d.base || 'null') } : null,
+  });
+}
+
+async function gerarDiagnostico({ env, user }, id) {
+  if (!env.GEMINI_API_KEY) fail('A geração automática precisa da chave GEMINI_API_KEY. Use "Gerar via Claude" enquanto isso.');
+  const { base } = await contextoDiagnostico(env, id, user.org_id);
+  const { conteudo, modelo } = await gerarComGemini(env, montarPrompt(base));
+  await gravarDiagnostico(env, user, id, { conteudo, base, fonte: 'gemini', modelo });
+  return json({ ok: true });
+}
+
+async function promptDiagnostico({ env, user }, id) {
+  const { base } = await contextoDiagnostico(env, id, user.org_id);
+  return json({ prompt: montarPrompt(base), n: base.n });
+}
+
+async function importarDiagnostico({ env, user, body }, id) {
+  const { base } = await contextoDiagnostico(env, id, user.org_id);
+  let conteudo;
+  try { conteudo = normalizar(body.texto); } catch (e) { fail('Não consegui ler o resultado colado: ' + e.message); }
+  await gravarDiagnostico(env, user, id, { conteudo, base, fonte: 'manual', modelo: 'colado' });
+  return json({ ok: true });
+}
+
+async function salvarDiagnostico({ env, user, body }, id) {
+  const d = await one(env, 'SELECT id FROM diagnosticos WHERE projeto_id=? AND org_id=?', id, user.org_id);
+  if (!d) fail('Gere o diagnóstico antes de editar.');
+  let conteudo;
+  try { conteudo = normalizar(body.conteudo); } catch (e) { fail(e.message); }
+  const versao = String(body.versao || '').trim().slice(0, 20) || null;
+  await run(env, "UPDATE diagnosticos SET conteudo=?, versao=COALESCE(?, versao), editado_em=datetime('now') WHERE id=?", JSON.stringify(conteudo), versao, d.id);
+  await log(env, user, 'diagnostico.editado', id);
+  return json({ ok: true });
 }
