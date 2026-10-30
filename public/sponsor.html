@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>QR Codes · Oriente One</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css?v=1.0.0">
+<script src="/vendor/qrcode.js"></script>
+<style>
+  .pub-head { background: var(--navy); color: #fff; padding: 22px 16px 26px; }
+  .pub-head .in, .pub-main { max-width: 980px; margin: 0 auto; }
+  .pub-head .brand { padding: 0 0 10px; font-size: 11px; }
+  .pub-head h1 { color: #fff; font-size: 21px; } .pub-head p { color: #C9D6E3; margin: 6px 0 0; }
+  .pub-main { padding: 16px 16px 60px; }
+  .poster { text-align: center; padding: 28px 20px; }
+  .poster .qr svg { width: 240px; height: 240px; }
+  .poster h2 { font-size: 20px; margin-bottom: 4px; }
+  .steps { text-align: left; font-size: 13px; color: var(--muted); max-width: 320px; margin: 14px auto 0; padding-left: 18px; }
+  @media print {
+    .pub-head, .no-print { display: none !important; }
+    .pub-main { padding: 0; max-width: none; }
+    .grid { display: block; }
+    .poster { page-break-after: always; border: 0 !important; box-shadow: none !important; padding-top: 60px; }
+    .poster .qr svg { width: 340px; height: 340px; }
+    .poster h2 { font-size: 28px; }
+  }
+</style>
+<script src="/sponsor.js?v=1.0.0" type="module"></script>
+</head>
+<body>
+<div id="root"><div class="empty">Carregando…</div></div>
+<div id="toast"></div>
+</body>
+</html>
