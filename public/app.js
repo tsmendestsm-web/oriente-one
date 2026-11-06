@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | Painel administrativo
+// Oriente One v1.3.0 | Painel administrativo
 import { esc, brl, num, dataBR, mesBR, hoje, compAtual, addComp, api, toast, qrSvg, formData, copiar, baixarCsv, csvNum, VERSION } from './ui.js';
 
 const $app = document.getElementById('app');
@@ -107,13 +107,16 @@ const NAV = [
 ];
 
 function shell() {
+  const links = NAV.map(([k, l]) => (k === 'grp' ? `<span class="sep" data-l="${l}"></span>` : `<a href="#/${k}" data-nav="${k}">${l}</a>`)).join('');
   $app.innerHTML = `<div class="shell">
-    <aside class="side" id="side">
-      <div class="brand">ORIENTE <span>ONE</span><small>${esc(S.me.user.org_nome)}</small></div>
-      <nav class="nav">${NAV.map(([k, l, i]) => (k === 'grp' ? `<div class="grp">${l}</div>` : `<a href="#/${k}" data-nav="${k}"><span style="width:16px;text-align:center">${i}</span>${l}</a>`)).join('')}</nav>
-      <div class="foot"><b>${esc(S.me.user.nome)}</b>${esc(S.me.user.papel)} · v${VERSION}<button class="btn sm" id="sair">Sair</button></div>
-    </aside>
+    <header class="topbar"><div class="in">
+      <div class="id"><a class="brand" href="#/painel">ORIENTE <span>ONE</span></a><small>${esc(S.me.user.org_nome)}</small></div>
+      <nav class="nav" id="nav">${links}</nav>
+      <button class="btn sm tb-menu" id="tbMenu" aria-label="Abrir menu">☰</button>
+      <div class="user"><div class="who"><b>${esc(S.me.user.nome)}</b>${esc(S.me.user.papel)} · v${VERSION}</div><button class="btn sm" id="sair">Sair</button></div>
+    </div></header>
     <main class="main" id="view"></main></div>`;
+  document.getElementById('tbMenu').onclick = () => document.getElementById('nav').classList.toggle('open');
   document.getElementById('sair').onclick = async () => { await api('/logout', { method: 'POST' }); location.hash = ''; boot(); };
   window.onhashchange = route;
   route();
@@ -125,7 +128,7 @@ async function route() {
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
   const [, sec = 'painel', a, b] = (location.hash || '#/painel').split('/');
   document.querySelectorAll('[data-nav]').forEach((x) => x.classList.toggle('on', x.dataset.nav === sec));
-  document.getElementById('side')?.classList.remove('open');
+  document.getElementById('nav')?.classList.remove('open');
   const v = document.getElementById('view');
   v.innerHTML = '<div class="empty">Carregando…</div>';
   try {
@@ -136,7 +139,7 @@ async function route() {
     v.innerHTML = `<div class="card"><b>Erro:</b> ${esc(e.message)}</div>`;
   }
 }
-const topo = (titulo, sub = '', acoes = '') => `<div class="top"><div><button class="btn sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">☰</button><h1>${titulo}</h1>${sub ? `<div class="muted">${sub}</div>` : ''}</div><div class="actions">${acoes}</div></div>`;
+const topo = (titulo, sub = '', acoes = '') => `<div class="top"><div><h1>${titulo}</h1>${sub ? `<div class="muted">${sub}</div>` : ''}</div><div class="actions">${acoes}</div></div>`;
 
 // ------------------------------------------------------------------ painel
 async function vPainel(v) {
@@ -759,7 +762,7 @@ async function exportarPptx(dg, btn) {
   btn.disabled = true; const t = btn.textContent; btn.textContent = 'Gerando PPTX…';
   try {
     if (!window.PptxGenJS) await carregarScript('/vendor/pptxgen.bundle.js');
-    const { montarDeck, nomeArquivo } = await import('/deck.js?v=1.2.0');
+    const { montarDeck, nomeArquivo } = await import('/deck.js?v=1.3.0');
     const pres = montarDeck(window.PptxGenJS, { conteudo: dg.conteudo, base: dg.base, versao: dg.versao, data: new Date() });
     await pres.writeFile({ fileName: nomeArquivo({ versao: dg.versao, empresa: dg.base.empresa }) });
     toast('PPTX gerado.');

@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | API (Cloudflare Pages Functions + D1)
+// Oriente One v1.3.0 | API (Cloudflare Pages Functions + D1)
 import { INSTRUMENTS, PRODUTOS } from './instruments.js';
 import { resultadoOrg, resultadoNR1 } from './scoring.js';
 import { pixCopiaCola } from './pix.js';
@@ -6,7 +6,7 @@ import { asaasAtivo, garantirCliente, emitirBoleto, cancelarBoleto } from './asa
 import { enviarEmail, layout, botao } from './mail.js';
 import { calcularBase, montarPrompt, normalizar, gerarComGemini, PILARES } from './motor-org.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 // ---------------------------------------------------------------- utilidades
 const json = (data, status = 200, headers = {}) =>
@@ -559,14 +559,14 @@ async function enviarFatura({ env, user, origin, body }, id) {
   const linhas = [
     `<p>Olá, segue a cobrança referente a <b>${esc(f.descricao || f.objeto)}</b>.</p>`,
     `<table cellpadding="6" style="border-collapse:collapse;font-size:14px;margin:12px 0">
-      <tr><td style="color:#64748B">Fatura</td><td><b>${esc(f.numero)}</b></td></tr>
-      <tr><td style="color:#64748B">Contrato</td><td>${esc(f.contrato)}</td></tr>
-      <tr><td style="color:#64748B">Valor</td><td><b>${brl(f.valor)}</b></td></tr>
-      <tr><td style="color:#64748B">Vencimento</td><td><b>${dataBR(f.vencimento)}</b></td></tr></table>`,
+      <tr><td style="color:#888888">Fatura</td><td><b>${esc(f.numero)}</b></td></tr>
+      <tr><td style="color:#888888">Contrato</td><td>${esc(f.contrato)}</td></tr>
+      <tr><td style="color:#888888">Valor</td><td><b>${brl(f.valor)}</b></td></tr>
+      <tr><td style="color:#888888">Vencimento</td><td><b>${dataBR(f.vencimento)}</b></td></tr></table>`,
   ];
   if (f.boleto_url) linhas.push(botao(f.boleto_url, 'Abrir boleto'));
-  if (f.linha_digitavel) linhas.push(`<p style="font-size:13px;color:#64748B">Linha digitável:<br><span style="font-family:monospace;color:#1A1F2B">${esc(f.linha_digitavel)}</span></p>`);
-  if (f.pix_copia_cola) linhas.push(`<p style="font-size:13px;color:#64748B">PIX copia e cola:<br><span style="font-family:monospace;font-size:11px;color:#1A1F2B;word-break:break-all">${esc(f.pix_copia_cola)}</span></p>`);
+  if (f.linha_digitavel) linhas.push(`<p style="font-size:13px;color:#888888">Linha digitável:<br><span style="font-family:monospace;color:#1A1A1A">${esc(f.linha_digitavel)}</span></p>`);
+  if (f.pix_copia_cola) linhas.push(`<p style="font-size:13px;color:#888888">PIX copia e cola:<br><span style="font-family:monospace;font-size:11px;color:#1A1A1A;word-break:break-all">${esc(f.pix_copia_cola)}</span></p>`);
   if (f.org.instrucoes_pagamento) linhas.push(`<p style="font-size:13px">${esc(f.org.instrucoes_pagamento)}</p>`);
   const r = await enviarEmail(env, { to, subject: `${f.org.nome} · Fatura ${f.numero} · vencimento ${dataBR(f.vencimento)}`, html: layout(`Fatura ${f.numero}`, linhas.join('')), replyTo: f.org.email });
   if (!r.ok) fail('Falha no envio: ' + r.error);
@@ -787,15 +787,15 @@ async function enviarProjetoInterno({ env, user, origin }, id) {
   const org = await one(env, 'SELECT nome,email FROM orgs WHERE id=?', user.org_id);
   const empresa = p.nome_fantasia || p.cliente;
   const sponsorUrl = `${origin}/s/${p.sponsor_token}`;
-  const lista = p.campanhas.map((c) => `<li style="margin-bottom:6px"><b>${esc(c.nome)}</b>${c.audience ? ` · ${esc(c.audience)}` : ''}<br><a href="${origin}/a/${c.token}" style="color:#0E9F8E">${origin}/a/${c.token}</a></li>`).join('');
+  const lista = p.campanhas.map((c) => `<li style="margin-bottom:6px"><b>${esc(c.nome)}</b>${c.audience ? ` · ${esc(c.audience)}` : ''}<br><a href="${origin}/a/${c.token}" style="color:#612B4A">${origin}/a/${c.token}</a></li>`).join('');
   const html = layout(`${esc(p.titulo)}`, `
     <p>Olá, ${esc(p.sponsor_nome.split(' ')[0])}.</p>
     <p>Você é o sponsor do <b>${esc(PRODUTOS[p.produto].nome)}</b> da <b>${esc(empresa)}</b>. Preparamos uma página com os QR Codes e links de acesso para você distribuir aos participantes.</p>
     ${botao(sponsorUrl, 'Abrir QR Codes para divulgação')}
-    <p style="font-size:13px;color:#64748B">Na página você pode imprimir os QR Codes, copiar os links e acompanhar quantas respostas já chegaram.</p>
+    <p style="font-size:13px;color:#888888">Na página você pode imprimir os QR Codes, copiar os links e acompanhar quantas respostas já chegaram.</p>
     <p style="font-size:13px;margin-top:20px">Links diretos:</p><ul style="font-size:13px;padding-left:18px">${lista}</ul>
     ${p.prazo ? `<p style="font-size:13px">Prazo para respostas: <b>${dataBR(p.prazo)}</b>.</p>` : ''}
-    ${p.produto === 'nr1' ? '<p style="font-size:13px;color:#64748B">O Formulário A é destinado a gestores, SST e RH. O Formulário B é para todos os colaboradores e é 100% anônimo.</p>' : ''}
+    ${p.produto === 'nr1' ? '<p style="font-size:13px;color:#888888">O Formulário A é destinado a gestores, SST e RH. O Formulário B é para todos os colaboradores e é 100% anônimo.</p>' : ''}
   `);
   const r = await enviarEmail(env, { to: p.sponsor_email, subject: `${org.nome} · ${PRODUTOS[p.produto].nome} · links para os participantes`, html, replyTo: org.email || user.email });
   if (r.ok) await run(env, "UPDATE projetos SET enviado_em=datetime('now') WHERE id=?", id);

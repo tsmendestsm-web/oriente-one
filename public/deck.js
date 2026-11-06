@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | Deck EXPLORE · Diagnóstico Organizacional (11 slides, padrão bordeaux)
+// Oriente One v1.3.0 | Deck EXPLORE · Diagnóstico Organizacional (11 slides, padrão bordeaux)
 // Porta do modelo aprovado (skill explore-diagnostico-pptx). Funciona no navegador e no Node.
 
 const BORDO = '612B4A', BORDO_D = '4A1F36', CINZA1 = 'F5F0F3', CINZA2 = 'E8E1E5', BRANCO = 'FFFFFF';

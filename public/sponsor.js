@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | Página do sponsor: QR Codes para divulgação
+// Oriente One v1.3.0 | Página do sponsor: QR Codes para divulgação
 import { esc, api, qrSvg, copiar, dataBR } from './ui.js';
 
 const token = location.pathname.split('/').filter(Boolean).pop();

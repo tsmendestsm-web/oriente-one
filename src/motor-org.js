@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | Motor de Geração do Diagnóstico Organizacional EXPLORE
+// Oriente One v1.3.0 | Motor de Geração do Diagnóstico Organizacional EXPLORE
 // Cálculo determinístico (scores, pilares, perfil) + narrativa gerada pela IA seguindo o Prompt Mestre.
 import { INSTRUMENTS } from './instruments.js';
 import { ORG_FAIXAS } from './scoring.js';

@@ -1,8 +1,12 @@
-# Oriente One · v1.2.0
+# Oriente One · v1.3.0
 
 Base da Plataforma Oriente. Etapa 1: **Contratos, Faturamento, Relatórios e Assessments** (Diagnóstico Organizacional, Diagnóstico NR-1 com Formulários A e B; DSFE registrado e bloqueado até o questionário ser carregado).
 
-**Novo na v1.1.0:** motor de geração do Diagnóstico Organizacional EXPLORE dentro da plataforma (respostas → relatório → PPTX de 11 slides) e contrato amarrado ao serviço contratado.
+**Novo na v1.3.0:** menus na barra superior (com menu recolhível no celular) e identidade visual da Explore em toda a ferramenta: bordô `#612B4A`/`#4A1F36`, fundo off-white `#F5F0F3`, Cambria nos títulos e Calibri no texto (Caladea e Carlito, equivalentes gratuitos, entram automaticamente em quem não tem as fontes do Office). Vale para o painel, o formulário público, a página do sponsor e os e-mails. Nenhuma mudança de banco: não precisa rodar o `schema.sql`.
+
+**v1.2.0:** voz de consultor sênior no motor do diagnóstico.
+
+**v1.1.0:** motor de geração do Diagnóstico Organizacional EXPLORE dentro da plataforma (respostas → relatório → PPTX de 11 slides) e contrato amarrado ao serviço contratado.
 
 Stack igual às outras ferramentas: **Cloudflare Pages + Pages Functions + D1 + Resend**, código no **GitHub**. Sem build: o Cloudflare publica a pasta `public/` e as funções de `functions/`.
 

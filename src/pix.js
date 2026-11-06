@@ -1,4 +1,4 @@
-// Oriente One v1.2.0 | PIX BR Code (copia e cola) com valor e identificador. Padrão EMV/BACEN, sem custo.
+// Oriente One v1.3.0 | PIX BR Code (copia e cola) com valor e identificador. Padrão EMV/BACEN, sem custo.
 const tlv = (id, v) => id + String(v.length).padStart(2, '0') + v;
 
 const strip = (s, max) =>
