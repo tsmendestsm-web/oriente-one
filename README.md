@@ -1,4 +1,4 @@
-# Oriente One · v1.1.0
+# Oriente One · v1.2.0
 
 Base da Plataforma Oriente. Etapa 1: **Contratos, Faturamento, Relatórios e Assessments** (Diagnóstico Organizacional, Diagnóstico NR-1 com Formulários A e B; DSFE registrado e bloqueado até o questionário ser carregado).
 
@@ -22,7 +22,7 @@ Stack igual às outras ferramentas: **Cloudflare Pages + Pages Functions + D1 + 
 ### 1.1 Banco D1 (antes do primeiro push)
 No painel Cloudflare: **Storage & Databases → D1 → Create** com o nome `oriente-one`.
 Depois, em **Console** do banco, cole e execute todo o conteúdo de `schema.sql`.
-Copie o **Database ID** e substitua `COLE_AQUI_O_ID_DO_D1` no `wrangler.toml`. Sem esse ID o Cloudflare recusa o deploy.
+O `wrangler.toml` já vem com o ID do banco `oriente-one` (5487fc69-e5b3-46bc-81ea-57960a99f5fd). Se recriar o banco, troque o ID ali: sem ele o Cloudflare recusa o deploy.
 
 ### 1.2 GitHub
 1. Crie o repositório `oriente-one` em github.com/tsmendestsm-web (privado).
@@ -117,7 +117,7 @@ Em **Assessments → projeto → aba Diagnóstico EXPLORE**:
 2. Revise na tela; **Editar texto** abre todos os campos com contador de caracteres no limite que cabe no slide, e a versão do documento (PPT2026.x).
 3. **Exportar PPTX** gera no navegador o deck de 11 slides no padrão bordeaux: `EXPLORE - PPT{versão} - Diagnostico Organizacional - {Cliente}.pptx`.
 
-Como funciona: o motor usa o **Prompt Mestre EXPLORE** (`src/motor-org.js`). Os números são calculados pela plataforma e não passam pela IA; a IA escreve apenas a análise. Nomes e e-mails dos respondentes não são enviados à IA (aparecem só na capa do PPTX).
+Como funciona: o motor usa o **Prompt Mestre EXPLORE** e a **Voz do Consultor** (`src/motor-org.js`, constante `VOZ_CONSULTOR`): interpretação com senso crítico, leitura de mercado do setor declarado, números como prova e não como manchete, linguagem humana sem jargão. A data do diagnóstico entra no prompt para o roadmap considerar a sazonalidade. Os números são calculados pela plataforma e não passam pela IA; a IA escreve apenas a análise. Nomes e e-mails dos respondentes não são enviados à IA (aparecem só na capa do PPTX).
 
 Pilares do Prompt Mestre a partir das 29 questões de escala:
 | Pilar | Questões |

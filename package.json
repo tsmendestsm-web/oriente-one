@@ -1,6 +1,6 @@
 {
   "name": "oriente-one",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Oriente One · Plataforma Oriente",
   "scripts": {
     "dev": "wrangler pages dev",

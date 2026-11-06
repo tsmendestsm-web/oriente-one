@@ -1,4 +1,4 @@
-// Oriente One v1.1.0 | Adaptador de boleto registrado via Asaas (opcional).
+// Oriente One v1.2.0 | Adaptador de boleto registrado via Asaas (opcional).
 // Ativado quando os secrets ASAAS_API_KEY (e opcionalmente ASAAS_ENV=sandbox) estão configurados.
 const base = (env) => (env.ASAAS_ENV === 'sandbox' ? 'https://api-sandbox.asaas.com/v3' : 'https://api.asaas.com/v3');
 

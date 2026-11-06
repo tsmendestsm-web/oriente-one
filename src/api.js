@@ -1,4 +1,4 @@
-// Oriente One v1.1.0 | API (Cloudflare Pages Functions + D1)
+// Oriente One v1.2.0 | API (Cloudflare Pages Functions + D1)
 import { INSTRUMENTS, PRODUTOS } from './instruments.js';
 import { resultadoOrg, resultadoNR1 } from './scoring.js';
 import { pixCopiaCola } from './pix.js';
@@ -6,7 +6,7 @@ import { asaasAtivo, garantirCliente, emitirBoleto, cancelarBoleto } from './asa
 import { enviarEmail, layout, botao } from './mail.js';
 import { calcularBase, montarPrompt, normalizar, gerarComGemini, PILARES } from './motor-org.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 // ---------------------------------------------------------------- utilidades
 const json = (data, status = 200, headers = {}) =>

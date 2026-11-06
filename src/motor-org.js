@@ -1,4 +1,4 @@
-// Oriente One v1.1.0 | Motor de Geração do Diagnóstico Organizacional EXPLORE
+// Oriente One v1.2.0 | Motor de Geração do Diagnóstico Organizacional EXPLORE
 // Cálculo determinístico (scores, pilares, perfil) + narrativa gerada pela IA seguindo o Prompt Mestre.
 import { INSTRUMENTS } from './instruments.js';
 import { ORG_FAIXAS } from './scoring.js';
@@ -120,8 +120,9 @@ export function calcularBase({ empresa, unidade, respostas }) {
   const ordenados = porItem.filter((i) => i.media != null).sort((a, b) => a.media - b.media);
   const campo = (id) => respostas.map((r) => r.respostas[id]).filter((v) => v && String(v).trim().length > 1);
 
+  const unidadeLimpa = unidade && unidade.trim().toLowerCase() !== String(empresa || '').trim().toLowerCase() ? unidade.trim() : null;
   return {
-    empresa, unidade: unidade || null, n,
+    empresa, unidade: unidadeLimpa, n,
     respondentes: respostas.map((r) => r.perfil?.nome).filter(Boolean),
     perfil: {
       setor: moda(campo('q3'))[0]?.valor || null,
@@ -147,6 +148,7 @@ export function montarPrompt(base) {
   const pct = (lista) => lista.map((x) => `${x.valor} (${x.n})`).join('; ') || 'sem resposta';
   const dados = [
     `EMPRESA: ${base.empresa}${base.unidade ? ` · unidade ${base.unidade}` : ''}`,
+    `DATA DO DIAGNÓSTICO: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' })}`,
     `RESPONDENTES: ${base.n}`,
     `SETOR declarado: ${base.abertas.setores.join(' | ') || 'não informado'}`,
     `PORTE (colaboradores): ${base.perfil.porte || 'não informado'} · TEMPO DE OPERAÇÃO: ${base.perfil.maturidade || 'não informado'}`,
@@ -161,7 +163,7 @@ export function montarPrompt(base) {
     ...base.secoes.map((s) => `- ${s.titulo}: ${fmt1(s.media)}`),
     '',
     'TODAS AS QUESTÕES (média 1 a 5; desvio = dispersão entre respondentes):',
-    ...base.itens.map((i) => `- Q${i.num} [${i.secao}] ${i.texto} → média ${fmt1(i.media)}${base.n > 1 ? `, desvio ${fmt1(i.desvio)}` : ''}${i.invertido ? ' (pontuação invertida: nota alta = dependência alta = ruim; a média já está invertida)' : ''}`),
+    ...base.itens.map((i) => `- Q${i.num} [${i.secao}] ${i.texto} → média ${fmt1(i.media)}${base.n > 1 ? `, desvio ${fmt1(i.desvio)}` : ''}${i.invertido ? ' (questão invertida: a média já foi convertida, então nota alta aqui significa BAIXA dependência, o que é bom; nota baixa significa dependência alta)' : ''}`),
     '',
     `PIORES QUESTÕES: ${base.maisBaixos.map((i) => `Q${i.num} (${fmt1(i.media)})`).join(', ')}`,
     `MELHORES QUESTÕES: ${base.maisAltos.map((i) => `Q${i.num} (${fmt1(i.media)})`).join(', ')}`,
@@ -200,16 +202,34 @@ Regras desta tarefa:
 1. Use SOMENTE os dados fornecidos. Não invente números, fatos, nomes de pessoas ou cargos. Responsáveis no roadmap são papéis (ex.: "Sócios", "Gestor Financeiro").
 2. Os scores já foram calculados. Cite-os em formato brasileiro (ex.: 3,4) e nunca os altere.
 3. Use as questões (Q6 a Q34) e as frases dos respondentes como evidência. Interprete além do óbvio: padrões ocultos, dependência do fundador, desalinhamentos entre respondentes.
-4. Forças vêm das maiores médias; gargalos das menores médias e das dores relatadas. Recomendações, roadmap e OKRs atacam os gargalos.
+4. Forças partem das maiores médias e gargalos das menores médias e das dores relatadas, mas pese tudo contra o resultado real (crescimento e tendência): nota alta com resultado fraco é sinal de leitura generosa, não de força. Recomendações, roadmap e OKRs atacam os gargalos.
 5. Respeite os limites de caracteres: o texto vai para slides de tamanho fixo.
 6. Escreva em português do Brasil, tom profissional, direto, com peso nas afirmações. Evite travessão como muleta: prefira ponto, vírgula ou dois pontos.
-7. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, exatamente neste formato:
+7. Siga a seção VOZ E JULGAMENTO DO CONSULTOR abaixo em todos os campos.
+8. Responda APENAS com um JSON válido, sem texto antes ou depois, sem markdown, exatamente neste formato:
 ${formato}
+
+────────────────────────────────────────
+${VOZ_CONSULTOR}
 
 ────────────────────────────────────────
 DADOS DO ASSESSMENT
 ${dados}`;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Voz e julgamento do consultor sênior (aplicada a toda análise gerada pelo motor)
+// ---------------------------------------------------------------------------------------------
+export const VOZ_CONSULTOR = `VOZ E JULGAMENTO DO CONSULTOR (obrigatório)
+Escreva como um consultor sênior com mais de 20 anos de mercado, que já sentou à mesa de dezenas de empresas parecidas com esta e conversa com os sócios de igual para igual. O texto precisa soar como alguém que pensou sobre esta empresa, não como um relatório gerado a partir de notas.
+
+1. Interprete, não descreva. O cliente já sabe as notas que deu. O valor está em dizer o que elas significam, o que está por trás delas e o que acontece se nada mudar.
+2. Número é prova, não manchete. Use no máximo uma ou duas referências numéricas por bloco de texto e nunca enfileire questões (evite "Q8, Q9 e Q10 4,7"). A evidência detalhada vai no campo "evidencia".
+3. Senso crítico. Desconfie da autoavaliação: quando notas altas convivem com resultado ruim, diga com respeito que a nota está generosa e mostre onde está a distância entre a percepção e o resultado. Separe o que é cenário externo do que é decisão interna; reconheça o externo, mas não aceite como explicação para tudo. Aponte contradições entre respondentes e entre o que dizem e o que conseguem.
+4. Experiência de mercado. Use o que se sabe do setor e do modelo de negócio declarados (sazonalidade e datas fortes do varejo, dinâmica franqueador e franqueado, ciclo de venda, perfil de mão de obra) como leitura de padrão: "em operações desse porte é comum...". Considere a data do diagnóstico ao priorizar o roadmap. Nunca invente estatísticas de mercado nem afirme como fato sobre a empresa algo que não está nos dados.
+5. Fale como gente. Frases de tamanhos variados, vocabulário de reunião de diretoria, sem jargão de consultoria (alavancar, sinergia, jornada, potencializar, robusto, ecossistema) e sem fórmulas repetidas: a construção "não é X, é Y" pode aparecer no máximo uma vez no documento inteiro.
+6. Diga o que precisa ser dito. Se há um ponto desconfortável (dependência dos sócios, meta mal calibrada, desculpa externa, ambição à frente da base), nomeie com clareza e cuidado. Um bom consultor é contratado para isso.
+7. Recomendação com critério. Cada recomendação diz o que fazer e por que vem antes das outras. Corte qualquer recomendação que serviria para qualquer empresa.`;
 
 // Esquema de saída estruturada (Gemini)
 const S = (description) => ({ type: 'STRING', description });

@@ -1,4 +1,4 @@
-// Oriente One v1.1.0 | Formulário público do assessment
+// Oriente One v1.2.0 | Formulário público do assessment
 import { esc, api, toast } from './ui.js';
 
 const token = location.pathname.split('/').filter(Boolean).pop();

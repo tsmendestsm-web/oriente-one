@@ -1,4 +1,4 @@
-// Oriente One v1.1.0 | Painel administrativo
+// Oriente One v1.2.0 | Painel administrativo
 import { esc, brl, num, dataBR, mesBR, hoje, compAtual, addComp, api, toast, qrSvg, formData, copiar, baixarCsv, csvNum, VERSION } from './ui.js';
 
 const $app = document.getElementById('app');
@@ -759,7 +759,7 @@ async function exportarPptx(dg, btn) {
   btn.disabled = true; const t = btn.textContent; btn.textContent = 'Gerando PPTX…';
   try {
     if (!window.PptxGenJS) await carregarScript('/vendor/pptxgen.bundle.js');
-    const { montarDeck, nomeArquivo } = await import('/deck.js?v=1.1.0');
+    const { montarDeck, nomeArquivo } = await import('/deck.js?v=1.2.0');
     const pres = montarDeck(window.PptxGenJS, { conteudo: dg.conteudo, base: dg.base, versao: dg.versao, data: new Date() });
     await pres.writeFile({ fileName: nomeArquivo({ versao: dg.versao, empresa: dg.base.empresa }) });
     toast('PPTX gerado.');
